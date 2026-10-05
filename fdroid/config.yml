@@ -4,6 +4,7 @@
 
 repo_url: https://f-droid.redmanmale.com/repo
 repo_name: redmanmale
+repo_icon: icon.png
 repo_description: >-
   Binary F-Droid repository with official GitHub releases of v2rayNG
   (com.v2ray.ang). The APKs keep the upstream signing key.
