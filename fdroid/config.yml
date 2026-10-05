@@ -2,7 +2,7 @@
 # Change repo_url here when pointing the repo at a custom domain; the landing page
 # and add-repo link are derived from this value.
 
-repo_url: https://redmanmale.github.io/f-droid/repo
+repo_url: https://f-droid.redmanmale.com/repo
 repo_name: redmanmale
 repo_description: >-
   Binary F-Droid repository with official GitHub releases of v2rayNG
