@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>redmanmale F-Droid</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --fg: #1b1b1b;
+      --muted: #4a4a4a;
+      --bg: #f6f4ef;
+      --card: #fff;
+      --accent: #355c3a;
+      --code-bg: #ece9e2;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fg: #f2f2f2;
+        --muted: #b8b8b8;
+        --bg: #161616;
+        --card: #222;
+        --accent: #8fbf93;
+        --code-bg: #2b2b2b;
+      }
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      line-height: 1.5;
+      color: var(--fg);
+      background: var(--bg);
+    }
+    main {
+      max-width: 44rem;
+      margin: 0 auto;
+      padding: 2.5rem 1.25rem 4rem;
+    }
+    h1 { font-size: 1.75rem; margin-bottom: 0.35rem; }
+    p, li { color: var(--muted); }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 1.1rem 1.2rem;
+      margin: 1.25rem 0;
+    }
+    a { color: var(--accent); }
+    code, .fp {
+      font-family: ui-monospace, monospace;
+      font-size: 0.92em;
+      background: var(--code-bg);
+      padding: 0.1em 0.35em;
+      border-radius: 4px;
+      word-break: break-all;
+    }
+    .fp { display: block; padding: 0.7rem 0.8rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>redmanmale F-Droid</h1>
+    <p>A binary repository of official <a href="https://github.com/2dust/v2rayNG">v2rayNG</a> GitHub releases (<code>com.v2ray.ang</code>).</p>
+
+    <div class="card">
+      <p><strong>Add to F-Droid</strong></p>
+      <p><a href="__ADD_FDROIDREPOS__">Open in the F-Droid client</a></p>
+      <p>Or add it manually: <a href="__ADD_HTTPS__"><code>__REPO_URL__</code></a></p>
+      <p>Repository fingerprint:</p>
+      <code class="fp">__FINGERPRINT_GROUPED__</code>
+    </div>
+
+    <p>The APKs keep the upstream signing key. This repository updates a GitHub Releases install and does not update the F-Droid.org build.</p>
+  </main>
+</body>
+</html>

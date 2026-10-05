@@ -1,0 +1,15 @@
+# Public F-Droid repository settings. Passwords are injected in CI and never committed.
+# Change repo_url here when pointing the repo at a custom domain; the landing page
+# and add-repo link are derived from this value.
+
+repo_url: https://redmanmale.github.io/f-droid/repo
+repo_name: redmanmale
+repo_description: >-
+  Binary F-Droid repository with official GitHub releases of v2rayNG
+  (com.v2ray.ang). The APKs keep the upstream signing key.
+
+archive_older: 0
+repo_maxage: 14
+
+keystore: keystore.p12
+repo_keyalias: fdroid

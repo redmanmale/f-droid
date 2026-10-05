@@ -1,0 +1,14 @@
+/secrets/
+*.p12
+*.jks
+*.b64
+fdroid/keystore.p12
+fdroid/repo/
+fdroid/archive/
+fdroid/tmp/
+fdroid/unsigned/
+fdroid/srclibs/
+fdroid/build/
+_site/
+__pycache__/
+.python-version

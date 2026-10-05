@@ -1,0 +1,23 @@
+Categories:
+  - Internet
+License: GPL-3.0-only
+AuthorName: 2dust
+WebSite: https://github.com/2dust/v2rayNG
+SourceCode: https://github.com/2dust/v2rayNG
+IssueTracker: https://github.com/2dust/v2rayNG/issues
+Changelog: https://github.com/2dust/v2rayNG/releases
+
+Name: v2rayNG
+AutoName: v2rayNG
+
+Summary: A V2Ray client for Android
+Description: |-
+  Official GitHub Release builds of v2rayNG, redistributed as a binary
+  F-Droid repository.
+
+  The APKs keep the upstream GitHub signing key, so this repository
+  updates an existing GitHub install of com.v2ray.ang. It does not
+  update the F-Droid.org flavor (com.v2ray.ang.fdroid).
+
+AutoUpdateMode: None
+UpdateCheckMode: None

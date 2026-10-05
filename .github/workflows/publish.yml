@@ -1,0 +1,269 @@
+name: Publish F-Droid repo
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: fdroid-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.assets.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Select upstream release
+        id: assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/meta"
+          gh api "repos/2dust/v2rayNG/releases?per_page=30" > "$RUNNER_TEMP/meta/releases.json"
+          python3 <<'PY'
+          import json, os, pathlib, re, sys
+
+          releases = json.loads(pathlib.Path(os.environ["RUNNER_TEMP"], "meta/releases.json").read_text())
+          rel = next((r for r in releases if not r.get("draft")), None)
+          out = os.environ["GITHUB_OUTPUT"]
+
+          def write(k, v):
+              with open(out, "a", encoding="utf-8") as fh:
+                  fh.write(f"{k}={v}\n")
+
+          if rel is None:
+              print("No non-draft v2rayNG release found", file=sys.stderr)
+              sys.exit(1)
+
+          tag = rel["tag_name"]
+          apk_re = re.compile(r"^v2rayNG_.+_(arm64-v8a|armeabi-v7a|x86_64|x86)\.apk$")
+          apks = []
+          abis = set()
+          for asset in rel.get("assets") or []:
+              name = asset["name"]
+              if "-fdroid" in name or "universal" in name:
+                  continue
+              m = apk_re.fullmatch(name)
+              if m:
+                  apks.append(name)
+                  abis.add(m.group(1))
+
+          names = {a["name"] for a in rel.get("assets") or []}
+          pubkeys = sorted(n for n in names if n.endswith("public-key.asc"))
+          missing = []
+          for apk in apks:
+              if f"{apk}.sig" not in names:
+                  missing.append(f"{apk}.sig")
+
+          print(f"Latest non-draft release: {tag}")
+          print("APKs:", ", ".join(apks) or "(none)")
+          print("Public key:", ", ".join(pubkeys) or "(none)")
+
+          wanted = {"arm64-v8a", "armeabi-v7a", "x86_64", "x86"}
+          complete = abis == wanted and not missing and len(pubkeys) == 1
+          if not complete:
+              print("Incomplete asset set; keeping the previous Pages deployment.")
+              if missing:
+                  print("Missing signatures:", ", ".join(missing))
+              write("deploy", "false")
+              write("tag", tag)
+              sys.exit(0)
+
+          write("deploy", "true")
+          write("tag", tag)
+          write("pubkey", pubkeys[0])
+          pathlib.Path(os.environ["RUNNER_TEMP"], "meta/apks.txt").write_text("\n".join(apks) + "\n")
+          PY
+
+      - uses: actions/setup-python@v5
+        if: steps.assets.outputs.deploy == 'true'
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-java@v5
+        if: steps.assets.outputs.deploy == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+        if: steps.assets.outputs.deploy == 'true'
+
+      - name: Install fdroidserver
+        if: steps.assets.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xmlsec1 libmagic1
+          sdkmanager --install "build-tools;35.0.0"
+          python -m pip install --upgrade pip
+          python -m pip install "setuptools<81" fdroidserver
+          fdroid --version
+
+      - name: Download and verify APKs
+        if: steps.assets.outputs.deploy == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.assets.outputs.tag }}"
+          PUBKEY="${{ steps.assets.outputs.pubkey }}"
+          STAGING="$RUNNER_TEMP/upstream"
+          mkdir -p "$STAGING" fdroid/repo
+
+          mapfile -t APKS < "$RUNNER_TEMP/meta/apks.txt"
+          for apk in "${APKS[@]}"; do
+            gh release download "$TAG" --repo 2dust/v2rayNG -p "$apk" -p "${apk}.sig" -D "$STAGING" --clobber
+          done
+          gh release download "$TAG" --repo 2dust/v2rayNG -p "$PUBKEY" -D "$STAGING" --clobber
+
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          gpg --batch --import "$STAGING/$PUBKEY"
+
+          pinned=$(tr -d '[:space:]' < upstream/gpg-fingerprint.txt | tr 'a-f' 'A-F')
+          echo "Pinned upstream GPG fingerprint: $pinned"
+          echo "Imported GPG fingerprints:"
+          gpg --batch --fingerprint
+          ok=0
+          while IFS= read -r fpr; do
+            fpr=$(echo "$fpr" | tr -d '[:space:]')
+            if [ "$fpr" = "$pinned" ]; then
+              ok=1
+              break
+            fi
+          done < <(gpg --batch --with-colons --fingerprint | awk -F: '$1=="fpr" || $1=="fp2" {print toupper($10)}')
+          if [ "$ok" -ne 1 ]; then
+            echo "Upstream GPG fingerprint does not match upstream/gpg-fingerprint.txt"
+            exit 1
+          fi
+
+          for apk in "${APKS[@]}"; do
+            gpg --batch --verify "$STAGING/${apk}.sig" "$STAGING/$apk"
+            mv "$STAGING/$apk" fdroid/repo/
+          done
+          ls -la fdroid/repo
+
+      - name: Decode keystore and check fingerprint
+        if: steps.assets.outputs.deploy == 'true'
+        env:
+          FDROID_KEYSTORE_BASE64: ${{ secrets.FDROID_KEYSTORE_BASE64 }}
+          FDROID_KEYSTORE_PASS: ${{ secrets.FDROID_KEYSTORE_PASS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FDROID_KEYSTORE_BASE64:-}" ] || [ -z "${FDROID_KEYSTORE_PASS:-}" ]; then
+            echo "Set repository secrets FDROID_KEYSTORE_BASE64 and FDROID_KEYSTORE_PASS (see README.md)."
+            exit 1
+          fi
+          if [ ! -f fdroid/fingerprint.txt ]; then
+            echo "fdroid/fingerprint.txt is missing. Run scripts/init-keystore.ps1 and commit the file."
+            exit 1
+          fi
+
+          printf '%s' "$FDROID_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > fdroid/keystore.p12
+          chmod 600 fdroid/keystore.p12
+
+          expected=$(tr -d '[:space:]' < fdroid/fingerprint.txt | tr 'A-F' 'a-f')
+          if ! [[ "$expected" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "fdroid/fingerprint.txt must be 64 lowercase hex characters (SHA-256 of the repo certificate)."
+            exit 1
+          fi
+
+          keytool -exportcert -keystore fdroid/keystore.p12 -alias fdroid -storetype PKCS12 \
+            -storepass "$FDROID_KEYSTORE_PASS" -file "$RUNNER_TEMP/repo.cer"
+          actual=$(sha256sum "$RUNNER_TEMP/repo.cer" | awk '{print $1}')
+          echo "Repository fingerprint: $actual"
+          if [ "$actual" != "$expected" ]; then
+            echo "Keystore fingerprint $actual does not match fdroid/fingerprint.txt ($expected)."
+            echo "Do not generate a new key. Restore the original keystore secret."
+            exit 1
+          fi
+
+          SDK_PATH="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [ -z "$SDK_PATH" ]; then
+            echo "Android SDK path is not set"
+            exit 1
+          fi
+          SDK_PATH="$SDK_PATH" python3 <<'PY'
+          import json, os, pathlib
+          path = pathlib.Path("fdroid/config.yml")
+          with path.open("a", encoding="utf-8") as fh:
+              fh.write("\nkeystorepass: " + json.dumps(os.environ["FDROID_KEYSTORE_PASS"]) + "\n")
+              fh.write("keypass: " + json.dumps(os.environ["FDROID_KEYSTORE_PASS"]) + "\n")
+              fh.write("sdk_path: " + json.dumps(os.environ["SDK_PATH"]) + "\n")
+          PY
+          chmod 600 fdroid/config.yml
+
+      - name: Build signed index
+        if: steps.assets.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+          cd fdroid
+          fdroid update --create-metadata --pretty
+          rm -f keystore.p12
+          test -f repo/index-v1.jar || test -f repo/index-v2.json
+          ls -la repo
+
+      - name: Assemble Pages site
+        if: steps.assets.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+          REPO_URL=$(awk '/^repo_url:/{print $2; exit}' fdroid/config.yml | tr -d '\r')
+          REPO_URL="${REPO_URL%/}"
+          FP=$(tr -d '[:space:]' < fdroid/fingerprint.txt | tr 'a-f' 'A-F')
+          python3 - "$REPO_URL" "$FP" <<'PY'
+          import pathlib, sys
+          from urllib.parse import urlparse
+          repo_url, fp = sys.argv[1], sys.argv[2]
+          grouped = " ".join(fp[i:i + 2] for i in range(0, len(fp), 2))
+          parsed = urlparse(repo_url)
+          add_https = f"{repo_url}?fingerprint={fp}"
+          add_fdroid = f"fdroidrepos://{parsed.netloc}{parsed.path}?fingerprint={fp}"
+          html = pathlib.Path("site/index.html").read_text(encoding="utf-8")
+          for key, value in {
+              "__REPO_URL__": repo_url,
+              "__FINGERPRINT__": fp,
+              "__FINGERPRINT_GROUPED__": grouped,
+              "__ADD_HTTPS__": add_https,
+              "__ADD_FDROIDREPOS__": add_fdroid,
+          }.items():
+              html = html.replace(key, value)
+          pathlib.Path("_site").mkdir(exist_ok=True)
+          pathlib.Path("_site/index.html").write_text(html, encoding="utf-8")
+          print("Add-repo URL:", add_https)
+          PY
+          mkdir -p _site/repo
+          cp -a fdroid/repo/. _site/repo/
+          touch _site/.nojekyll
+          if [ -f site/CNAME ]; then
+            cp site/CNAME _site/CNAME
+          fi
+
+      - uses: actions/configure-pages@v5
+        if: steps.assets.outputs.deploy == 'true'
+
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.assets.outputs.deploy == 'true'
+        with:
+          path: _site
+
+  deploy:
+    needs: publish
+    if: needs.publish.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
