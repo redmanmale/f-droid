@@ -2,7 +2,7 @@
 
 A binary F-Droid repository of official [v2rayNG](https://github.com/2dust/v2rayNG) GitHub releases (`com.v2ray.ang`). The APKs keep the upstream signing key, so the client updates an install from GitHub Releases. It does not update the F-Droid.org build (`com.v2ray.ang.fdroid`).
 
-The public address lives in one field, `repo_url` in [`fdroid/config.yml`](fdroid/config.yml). It is currently `https://redmanmale.github.io/f-droid/repo`. GitHub Actions runs once a day, takes the latest non-draft release, verifies the GPG signatures, signs the index with the existing repository key, and deploys the site to GitHub Pages.
+The public address lives in one field, `repo_url` in [`fdroid/config.yml`](fdroid/config.yml). It is currently `https://redmanmale.github.io/f-droid/repo`. GitHub Actions runs on every push to master and once a day, takes the latest non-draft release, verifies the GPG signatures, signs the index with the existing repository key, and deploys the site to GitHub Pages.
 
 ## Add the repository
 
