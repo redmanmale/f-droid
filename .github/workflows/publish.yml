@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: read
   pages: write
   id-token: write
@@ -23,6 +24,16 @@ jobs:
     outputs:
       deploy: ${{ steps.assets.outputs.deploy }}
     steps:
+      - name: Keep the schedule enabled
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A daily run does not count as repository activity. Re-enabling the
+          # workflow refreshes the 60-day clock so the cron is not turned off
+          # while v2rayNG has no release. This cannot revive a schedule that
+          # GitHub has already disabled.
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/actions/workflows/publish.yml/enable"
+
       - uses: actions/checkout@v5
 
       - name: Select upstream release

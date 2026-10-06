@@ -18,7 +18,7 @@ After the first successful deploy, open the [repository page](https://redmanmale
 4. **Settings → Pages**: set Source to **GitHub Actions**.
 5. **Actions → Publish F-Droid repo → Run workflow**. After it succeeds, check the landing page and the index file under `https://redmanmale.github.io/f-droid/repo/` (`index-v1.jar` or `index-v2.json`).
 
-The schedule can be skipped if the repository has no activity for 60 days. Run the workflow manually in that case.
+Each run re-enables this workflow so GitHub does not turn the daily schedule off after 60 days without commits. That call uses the built-in `GITHUB_TOKEN`. If GitHub has already disabled the schedule, turn the workflow back on once under Actions; the next run keeps it alive again.
 
 Do not run `fdroid init`. It creates a new key and changes the fingerprint.
 
